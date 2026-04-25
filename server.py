@@ -20,15 +20,11 @@ Or configure in Claude Desktop's config.json:
 from __future__ import annotations
 
 import asyncio
-import sys
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone, timedelta
-from typing import Any
+from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import FastMCP
 
 from blackboard.client import BlackboardClient
-from blackboard.models import Course
 
 # ──────────────────────────────────────────────
 #  Server initialisation
@@ -547,7 +543,7 @@ async def summarize_activity() -> str:
 
     urgent = [a for a in all_assignments if a.due_date and a.due_date <= cutoff_7]
     upcoming = [a for a in all_assignments if a.due_date and cutoff_7 < a.due_date <= cutoff_14]
-    no_date = [a for a in all_assignments if not a.due_date]
+
 
     urgent.sort(key=lambda a: a.due_date)
     all_announcements.sort(

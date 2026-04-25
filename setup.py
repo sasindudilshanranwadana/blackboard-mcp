@@ -141,7 +141,6 @@ async def _detect_interface(base_url: str) -> str:
     """
     import httpx
     ultra_url = f"{base_url}/ultra/institution-page"
-    classic_url = f"{base_url}/webapps/login/"
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
             resp = await client.get(ultra_url)
@@ -182,6 +181,7 @@ def _write_env(values: dict[str, str]) -> None:
 async def do_login(interface: str) -> dict[str, str]:
     # Reload config after .env was written
     import importlib
+
     import config as cfg_module
     importlib.reload(cfg_module)
     import blackboard.auth as auth_module
@@ -205,8 +205,9 @@ async def do_login(interface: str) -> dict[str, str]:
 
 async def do_test() -> bool:
     import importlib
-    import blackboard.client as client_module
+
     import blackboard.auth as auth_module
+    import blackboard.client as client_module
     importlib.reload(client_module)
 
     from blackboard.client import BlackboardClient
@@ -317,7 +318,7 @@ def do_claude_config(base_url: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def handle_clear_keychain() -> None:
-    from blackboard.auth import delete_credentials_from_keychain, clear_cookie_cache
+    from blackboard.auth import clear_cookie_cache, delete_credentials_from_keychain
     banner()
     console.print("[bold red]Clearing saved data...[/bold red]\n")
     delete_credentials_from_keychain()
@@ -381,7 +382,7 @@ async def main() -> None:
 
     # ── Step 5: Claude Desktop ───────────────────────────────────────────────
     step(5, total_steps, "Configure Claude Desktop")
-    server_name = do_claude_config(base_url)
+    do_claude_config(base_url)
 
     console.print()
 

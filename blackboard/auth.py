@@ -23,7 +23,7 @@ import json
 import sys
 from pathlib import Path
 
-from playwright.async_api import async_playwright, Page, Browser, BrowserContext
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from config import settings
 

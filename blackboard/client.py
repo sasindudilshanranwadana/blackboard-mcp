@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import re
 import sys
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 from urllib.parse import urljoin
 
 import httpx
@@ -356,7 +355,6 @@ class BlackboardClient:
         assignments = []
         if data and "results" in data:
             for item in data["results"]:
-                due_raw = item.get("availability", {}).get("adaptiveRelease", {})
                 due_date = _parse_bb_datetime(item.get("grading", {}).get("due") if isinstance(item.get("grading"), dict) else None)
 
                 assignments.append(Assignment(
