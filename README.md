@@ -17,6 +17,21 @@
 
 ---
 
+## 🧠 Install with AI (one prompt)
+
+If you're using **Claude Code, Cursor, or Windsurf**, just paste this prompt and the AI installs everything for you:
+
+```
+Install the Blackboard MCP server for me from https://github.com/sasindudilshanranwadana/blackboard-mcp
+
+Run this in the terminal:
+  curl -fsSL https://raw.githubusercontent.com/sasindudilshanranwadana/blackboard-mcp/main/install.sh | bash
+
+Wait for it to finish (it opens a browser for me to log in). Then tell me what was configured and how to test it.
+```
+
+See [INSTALL_PROMPTS.md](INSTALL_PROMPTS.md) for prompts for every AI coding assistant.
+
 ## ✨ What is this?
 
 **Blackboard MCP** is a [Model Context Protocol](https://modelcontextprotocol.io) server that bridges Claude AI with your university's Blackboard LMS. Instead of navigating menus and dashboards, just ask Claude:
