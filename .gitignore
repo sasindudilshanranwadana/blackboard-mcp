@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────
+# Blackboard MCP — .gitignore
+# ─────────────────────────────────────────────
+
+# ── Credentials & secrets ─────────────────────
+.env
+!.env.example
+
+# ── Session / cookie caches ───────────────────
+*.session.json
+*.cookies.json
+.bb_mcp_session*
+~/.bb_mcp_session*   # home-dir cache (not in repo, but belt-and-suspenders)
+
+# ── Python artefacts ──────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# ── Virtual environments ──────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Playwright ────────────────────────────────
+playwright-report/
+test-results/
+
+# ── macOS system files ────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# ── IDE / editor ──────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Logs ──────────────────────────────────────
+*.log
+logs/
+
+# ── Misc ──────────────────────────────────────
+*.bak
+*.tmp
