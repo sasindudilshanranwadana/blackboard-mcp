@@ -34,9 +34,6 @@ console = Console()
 PROJECT_DIR = Path(__file__).parent
 PYTHON = sys.executable
 ENV_FILE = PROJECT_DIR / ".env"
-CLAUDE_CONFIG_PATH = (
-    Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-)
 
 # ── Known university Blackboard URLs (for autocomplete hints) ─────────────────
 KNOWN_UNIVERSITIES: dict[str, str] = {
@@ -275,11 +272,31 @@ def do_keychain() -> None:
 #  Step 5 — Configure Claude Desktop
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Known MCP client config file locations on macOS
+MCP_CLIENTS: list[tuple[str, Path]] = [
+    (
+        "Claude Desktop",
+        Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
+    ),
+    (
+        "Claude Code",
+        Path.home() / ".claude" / "claude_desktop_config.json",
+    ),
+    (
+        "Cursor",
+        Path.home() / ".cursor" / "mcp.json",
+    ),
+    (
+        "Windsurf",
+        Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
+    ),
+]
+
+
 def do_claude_config(base_url: str) -> None:
     # Derive a nice server name from the URL (e.g. "blackboard-cdu", "blackboard-uq")
     hostname = base_url.split("//")[-1].split("/")[0]          # e.g. online.cdu.edu.au
     parts = hostname.replace("www.", "").split(".")
-    # Pick the most meaningful part (usually 2nd-to-last before the TLD)
     uni_slug = next(
         (p for p in reversed(parts) if p not in ("edu", "au", "com", "ac", "uk", "nz", "online", "learn", "lms", "bb")),
         parts[0],
@@ -292,25 +309,33 @@ def do_claude_config(base_url: str) -> None:
         "cwd": str(PROJECT_DIR),
     }
 
-    config: dict = {}
-    if CLAUDE_CONFIG_PATH.exists():
-        try:
-            config = json.loads(CLAUDE_CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            config = {}
+    configured: list[str] = []
+    skipped: list[str] = []
 
-    existing = server_name in config.get("mcpServers", {})
-    config.setdefault("mcpServers", {})[server_name] = entry
-    CLAUDE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CLAUDE_CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    for client_name, config_path in MCP_CLIENTS:
+        # Only configure clients that are actually installed (config dir exists)
+        if not config_path.parent.exists():
+            skipped.append(client_name)
+            continue
 
-    action = "updated" if existing else "created"
-    success(f"Claude Desktop config {action} — server name: [cyan]{server_name}[/cyan]")
-    info(f"Config: [dim]{CLAUDE_CONFIG_PATH}[/dim]")
+        config: dict = {}
+        if config_path.exists():
+            try:
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+            except Exception:
+                config = {}
+
+        config.setdefault("mcpServers", {})[server_name] = entry
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        configured.append(client_name)
+
+    if configured:
+        success(f"Server [cyan]{server_name}[/cyan] configured in: {', '.join(configured)}")
+    if skipped:
+        info(f"Not installed (skipped): {', '.join(skipped)}")
     console.print()
-    warn("[bold]Restart Claude Desktop[/bold] to activate the MCP server.")
-
-    return server_name
+    warn("[bold]Restart any configured apps[/bold] to activate the MCP server.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
