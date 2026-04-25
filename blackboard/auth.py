@@ -65,8 +65,18 @@ LOGIN_URL_PATTERNS = [
     "shibboleth",
 ]
 
-# The post-login landing URL we navigate to first
-LANDING_PATH = "/ultra/institution-page"
+# The post-login landing URL — depends on Blackboard interface version
+def _get_landing_path() -> str:
+    """
+    Return the correct landing path for this university's Blackboard instance.
+    Ultra:   /ultra/institution-page
+    Classic: /webapps/portal/frameset.jsp
+    Auto-detect by reading BB_INTERFACE from .env (set by setup.py).
+    """
+    interface = getattr(settings, "interface", "ultra").lower()
+    if interface == "classic":
+        return "/webapps/portal/frameset.jsp"
+    return "/ultra/institution-page"   # default: Ultra
 
 
 # ──────────────────────────────────────────────
@@ -154,23 +164,22 @@ def _is_learnline_url(url: str) -> bool:
 
 async def _wait_for_login(page: Page, timeout_seconds: int = 180) -> bool:
     """
-    Wait for the user to complete SSO login and land on Blackboard Ultra.
+    Wait for the user to complete SSO login and land on Blackboard.
+    Handles both Ultra (/ultra/) and Classic (/webapps/) interfaces.
 
     Strategy:
-      Phase 1 — Wait for the browser to leave online.cdu.edu.au (redirect to SSO).
-                 If CDU uses embedded/iframe SSO that keeps the URL, skip to Phase 2
-                 after a short grace period.
-      Phase 2 — Wait for the browser to return to online.cdu.edu.au/ultra/ with
-                 actual page content (not a blank loading screen).
+      Phase 1 — Wait for the browser to leave the university domain (redirect to SSO).
+                 If SSO is embedded (no external redirect), skip after grace period.
+      Phase 2 — Wait for the browser to return to Blackboard with real content.
 
     Returns True on success, False on timeout.
     """
     import time
 
+    interface = getattr(settings, "interface", "ultra").lower()
     deadline = time.monotonic() + timeout_seconds
-    start_url = page.url          # e.g. https://online.cdu.edu.au/ultra/institution-page
-    left_home = False             # Have we seen the browser leave online.cdu.edu.au?
-    grace_deadline = time.monotonic() + 8  # seconds to wait for initial redirect
+    left_home = False
+    grace_deadline = time.monotonic() + 8
 
     print("[auth]    Phase 1: waiting for SSO redirect...", file=sys.stderr)
 
@@ -181,44 +190,52 @@ async def _wait_for_login(page: Page, timeout_seconds: int = 180) -> bool:
             await asyncio.sleep(1)
             continue
 
-        # ── Phase 1: detect leaving online.cdu.edu.au → SSO ──────────────────
+        # ── Phase 1: detect leaving the university domain ─────────────────
         if not left_home:
             if not _is_learnline_url(url) or _is_login_url(url):
-                # We've been redirected to SSO / login page
                 left_home = True
-                print(f"[auth]    Phase 1 ✓ SSO page detected: {url[:80]}", file=sys.stderr)
+                print(f"[auth]    Phase 1 ✓ SSO detected: {url[:80]}", file=sys.stderr)
                 print("[auth]    Phase 2: waiting for you to finish logging in...", file=sys.stderr)
             elif time.monotonic() > grace_deadline:
-                # SSO might be embedded (no external redirect). Start Phase 2 anyway.
                 left_home = True
-                print("[auth]    Phase 1: no external redirect detected, checking for login...", file=sys.stderr)
+                print("[auth]    Phase 1: no external redirect — checking for login...", file=sys.stderr)
             else:
                 await asyncio.sleep(0.8)
                 continue
 
-        # ── Phase 2: wait to land back on online.cdu.edu.au/ultra/ ───────────
-        if _is_learnline_url(url) and not _is_login_url(url) and "/ultra/" in url:
-            # We're back on Ultra — but make sure the app has actually rendered
-            # by waiting for any meaningful page content
-            await asyncio.sleep(2.5)   # let Angular/React render
+        # ── Phase 2: detect successful login on Blackboard ──────────────
+        if _is_learnline_url(url) and not _is_login_url(url):
+            # Ultra: URL contains /ultra/
+            if interface != "classic" and "/ultra/" in url:
+                await asyncio.sleep(2.5)
+                try:
+                    final_url = page.url
+                    if "/ultra/" in final_url and not _is_login_url(final_url):
+                        print("[auth]    Phase 2 ✓ Back on Ultra — login complete.", file=sys.stderr)
+                        return True
+                except Exception:
+                    pass
 
-            # Double-check URL hasn't bounced back to SSO
-            try:
-                final_url = page.url
-                if _is_learnline_url(final_url) and not _is_login_url(final_url) and "/ultra/" in final_url:
-                    # Try to confirm with a selector — but don't require it
-                    for sel in LOGGED_IN_SELECTORS:
-                        try:
-                            if await page.locator(sel).count() > 0:
-                                print(f"[auth]    Phase 2 ✓ Found element: {sel}", file=sys.stderr)
-                                return True
-                        except Exception:
-                            pass
-                    # Even without a selector match, URL is a strong enough signal
-                    print("[auth]    Phase 2 ✓ Back on Ultra URL, treating as logged in.", file=sys.stderr)
-                    return True
-            except Exception:
-                pass
+            # Classic: URL contains /webapps/ and a known Blackboard element
+            if interface == "classic" or "/ultra/" not in url:
+                for sel in LOGGED_IN_SELECTORS:
+                    try:
+                        if await page.locator(sel).count() > 0:
+                            print(f"[auth]    Phase 2 ✓ Element found: {sel}", file=sys.stderr)
+                            return True
+                    except Exception:
+                        pass
+                # Title fallback for Classic
+                try:
+                    title = await page.title()
+                    if title and not any(
+                        kw in title.lower()
+                        for kw in ["login", "sign in", "log in", "authentication", "shibboleth"]
+                    ):
+                        print(f"[auth]    Phase 2 ✓ Page title OK: '{title}'", file=sys.stderr)
+                        return True
+                except Exception:
+                    pass
 
         await asyncio.sleep(1.2)
 
@@ -232,9 +249,10 @@ async def _wait_for_login(page: Page, timeout_seconds: int = 180) -> bool:
 async def interactive_login() -> dict[str, str]:
     """
     Open a visible browser → user logs in → capture session cookies.
+    Works with any university SSO (Microsoft, Shibboleth, Google, custom).
     No credentials needed — just log in as you normally would.
     """
-    target_url = f"{settings.base_url}{LANDING_PATH}"
+    target_url = f"{settings.base_url}{_get_landing_path()}"
     print(f"\n[auth] 🌐 Opening browser — navigating to {target_url}", file=sys.stderr)
 
     async with async_playwright() as p:

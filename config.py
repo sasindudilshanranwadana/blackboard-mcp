@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # CDU Learnline base URL
     base_url: str = "https://online.cdu.edu.au"
 
+    # Blackboard interface version: 'ultra' (default) or 'classic'
+    # Detected automatically by setup.py and saved to .env
+    interface: str = "ultra"
+
     # Where to cache session cookies between server restarts
     session_cache: str = "~/.bb_mcp_session.json"
 
