@@ -241,16 +241,23 @@ async def do_test() -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def do_keychain() -> None:
-    console.print("  When your session expires, the server needs to log you in again.")
+    console.print("  You already logged in via the browser above. \u2705")
     console.print()
-    console.print("  [bold]Option A[/bold] — [cyan]Save credentials in macOS Keychain[/cyan]")
-    info("Fully automatic relogin. Stored securely by macOS — not in any file.")
+    console.print("  University sessions expire every few days. When that happens you have two options:")
     console.print()
-    console.print("  [bold]Option B[/bold] — [cyan]Re-run setup.py when needed[/cyan]")
-    info("Sessions typically last several days. Just run setup.py again to refresh.")
+    console.print("  [bold]Option A[/bold] — [green]Browser re-opens automatically[/green] [dim](recommended \u2014 no password needed)[/dim]")
+    info("When your session expires, a browser window will open and you log in again.")
+    info("Nothing is stored. Simple and secure.")
+    console.print()
+    console.print("  [bold]Option B[/bold] — [cyan]Save password in macOS Keychain[/cyan]")
+    info("Fully silent background relogin \u2014 no browser popup ever.")
+    info("Password is stored by macOS Keychain, not in any file.")
     console.print()
 
-    save = Confirm.ask("  Save credentials to macOS Keychain for automatic relogin?", default=True)
+    save = Confirm.ask(
+        "  Save password to Keychain for fully silent relogin? (No = browser reopens when needed)",
+        default=False,
+    )
 
     if save:
         console.print()
@@ -260,12 +267,12 @@ def do_keychain() -> None:
         from blackboard.auth import save_credentials_to_keychain
         ok = save_credentials_to_keychain(username.strip(), password.strip())
         if ok:
-            success("Credentials saved to macOS Keychain (accessible only by you).")
-            info("To remove them later:  python3 setup.py --clear-keychain")
+            success("Password saved to macOS Keychain \u2014 relogin will be fully automatic.")
+            info("To remove it later:  python3 setup.py --reset")
         else:
-            warn("Keychain save failed. Re-run setup.py when your session expires.")
+            warn("Keychain save failed \u2014 browser will reopen when your session expires.")
     else:
-        info("No problem — run [bold]python3 setup.py[/bold] again when your session expires.")
+        success("No problem \u2014 a browser window will open automatically when your session expires.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
