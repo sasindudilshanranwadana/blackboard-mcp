@@ -69,7 +69,7 @@ The setup wizard auto-detects your university's interface and handles authentica
 ### 1 — Clone & install
 
 ```bash
-git clone https://github.com/sasinduranwadana/blackboard-mcp.git
+git clone https://github.com/sasindudilshanranwadana/blackboard-mcp.git
 cd blackboard-mcp
 pip install -r requirements.txt
 playwright install chromium
@@ -220,6 +220,6 @@ MIT — see [LICENSE](LICENSE).
 
 <p align="center">
   Made with ❤️ by a student, for students.<br>
-  <a href="https://github.com/sasinduranwadana/blackboard-mcp/issues">Report an Issue</a> · 
-  <a href="https://github.com/sasinduranwadana/blackboard-mcp/discussions">Discussions</a>
+  <a href="https://github.com/sasindudilshanranwadana/blackboard-mcp/issues">Report an Issue</a> · 
+  <a href="https://github.com/sasindudilshanranwadana/blackboard-mcp/discussions">Discussions</a>
 </p>

@@ -126,17 +126,17 @@ class BlackboardClient:
     async def _check_session(self) -> bool:
         """Return True if our session cookies are still valid."""
         try:
-            # Hit the Ultra landing page — valid sessions return 200 with HTML content
-            # Invalid/expired sessions redirect to SSO (3xx) which httpx follows,
-            # landing on a login page we can detect by URL or content.
             resp = await self._http.get("/ultra/institution-page")
             final_url = str(resp.url)
-            # If we ended up on online.cdu.edu.au/ultra/ we're still logged in
-            if "online.cdu.edu.au" in final_url and "/ultra/" in final_url:
-                # Make sure it's not a login-related Ultra page
-                login_keywords = ["login", "signin", "saml", "auth", "shibboleth"]
+            base_host = settings.base_url.split("//")[-1].split("/")[0]
+            # Session is valid if we stayed on our Blackboard domain (not redirected to SSO)
+            if base_host in final_url:
+                login_keywords = ["login", "signin", "saml", "auth", "shibboleth", "/cas/"]
                 if not any(kw in final_url.lower() for kw in login_keywords):
                     return True
+            # Classic Blackboard fallback — try the portal page
+            if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
+                return True
             return False
         except Exception:
             return False
@@ -211,10 +211,10 @@ class BlackboardClient:
                 parts = full_name.split(" ", 1)
                 self._user = UserProfile(
                     id="unknown",
-                    username=settings.username,
+                    username="unknown",
                     given_name=parts[0] if parts else full_name,
                     family_name=parts[1] if len(parts) > 1 else "",
-                    student_id=settings.username,
+                    student_id=None,
                 )
                 return self._user
 
