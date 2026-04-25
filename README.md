@@ -61,14 +61,25 @@ The setup wizard auto-detects your university's interface and handles authentica
 
 ## ⚡ Quick Start
 
-### Prerequisites
+### Option A — One-shot installer (recommended)
 
-- Python 3.11+
-- [Claude Desktop](https://claude.ai/download)
-
-### 1 — Clone & install
+Paste this into your terminal. That's it.
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/sasindudilshanranwadana/blackboard-mcp/main/install.sh | bash
+```
+
+The installer will:
+1. Check Python 3.11+ and git are available
+2. Clone the repo to `~/blackboard-mcp`
+3. Create a virtual environment and install all dependencies
+4. Download Playwright's Chromium browser
+5. Launch the setup wizard → browser opens → log in → done
+
+---
+
+### Option B — Manual install
+
 git clone https://github.com/sasindudilshanranwadana/blackboard-mcp.git
 cd blackboard-mcp
 pip install -r requirements.txt
