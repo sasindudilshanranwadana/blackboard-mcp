@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff mypy
+
+      - name: Ruff lint
+        run: ruff check . --select E,W,F,I --ignore E501
+
+      - name: Check imports
+        run: python -c "import server, setup, config; from blackboard import auth, client, models; print('✅ All imports OK')"
+
+  security:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for accidental secrets
+        run: |
+          # Fail if any real-looking credentials are found
+          if grep -rE "password\s*=\s*['\"][^'\"]{4,}" --include="*.py" . | grep -v "getpass\|fill\|#\|selector\|input\["; then
+            echo "❌ Possible hardcoded credential found!"
+            exit 1
+          fi
+          echo "✅ No hardcoded credentials found"

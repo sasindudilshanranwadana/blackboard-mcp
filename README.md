@@ -1,149 +1,225 @@
-# 🎓 Blackboard MCP — CDU Learnline
+<p align="center">
+  <img src="assets/banner.png" alt="Blackboard MCP" width="100%">
+</p>
 
-An MCP server that connects Claude (or any MCP-compatible AI) to your **Charles Darwin University Learnline (Blackboard)** account. Instead of navigating Blackboard's complex interface, just ask Claude in plain English.
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square&logo=python" alt="Python 3.11+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License"></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible"></a>
+  <img src="https://img.shields.io/badge/Blackboard-Ultra%20%26%20Classic-orange?style=flat-square" alt="Blackboard Ultra & Classic">
+  <img src="https://img.shields.io/badge/SSO-any%20provider-teal?style=flat-square" alt="Any SSO">
+</p>
+
+<p align="center">
+  <b>Talk to your university Blackboard in plain English — through Claude AI.</b><br>
+  Works with <em>any</em> university that uses Blackboard Learn (Ultra or Classic).
+</p>
 
 ---
 
-## What You Can Ask Claude
+## ✨ What is this?
 
-| Question | Tool used |
-|---|---|
-| "What courses am I enrolled in?" | `list_courses` |
-| "Any new announcements?" | `get_announcements` |
-| "What assignments are due this week?" | `get_due_dates` |
-| "What's my grade in COMP101?" | `get_grades` |
-| "Show me the content in Week 3" | `get_course_content` |
-| "Catch me up on everything" | `summarize_activity` |
-| "Tell me about my nursing unit" | `get_course_details` |
+**Blackboard MCP** is a [Model Context Protocol](https://modelcontextprotocol.io) server that bridges Claude AI with your university's Blackboard LMS. Instead of navigating menus and dashboards, just ask Claude:
+
+> *"What assignments are due this week?"*
+> *"Catch me up on all announcements from my courses"*
+> *"What's my current grade in Database Concepts?"*
+
+No Blackboard API key or admin approval needed. Authentication uses your existing student login through a real browser — works with any SSO provider (Microsoft, Shibboleth, Google, and more).
 
 ---
 
-## Setup Guide
+## 🚀 Features
 
-### Step 1 — Prerequisites
+| Tool | What you can ask |
+|------|-----------------|
+| `get_my_profile` | *"Who am I logged in as?"* |
+| `list_courses` | *"What courses am I enrolled in?"* |
+| `get_course_details` | *"Tell me about my Software Systems unit"* |
+| `get_announcements` | *"Any new announcements from my lecturers?"* |
+| `get_assignments` | *"List all my assignments"* |
+| `get_due_dates` | *"What's due in the next 2 weeks?"* |
+| `get_grades` | *"What are my current grades?"* |
+| `get_course_content` | *"What content is in my Database course?"* |
+| `summarize_activity` | *"Give me a full catch-up on everything"* |
 
-Your system needs Python 3.11+. The packages were installed under Python 3.13 (framework):
+---
+
+## 🎓 Compatibility
+
+Works with **any university** running Blackboard Learn:
+
+- ✅ **Blackboard Ultra** (modern interface)
+- ✅ **Blackboard Classic** (legacy interface)
+- ✅ **Any SSO provider** — Microsoft ADFS, Shibboleth, Google, CAS, or custom
+
+The setup wizard auto-detects your university's interface and handles authentication through a real browser window — no special configuration needed.
+
+> **Built at Charles Darwin University (CDU)** — but designed to work anywhere.
+
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- [Claude Desktop](https://claude.ai/download)
+
+### 1 — Clone & install
+
 ```bash
-/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 --version
+git clone https://github.com/sasinduranwadana/blackboard-mcp.git
+cd blackboard-mcp
+pip install -r requirements.txt
+playwright install chromium
 ```
 
-### Step 2 — Install dependencies
+### 2 — Run the setup wizard
 
 ```bash
-cd "Blackboard MCP"
-/Library/Frameworks/Python.framework/Versions/3.13/bin/pip3 install -r requirements.txt
+python3 setup.py
 ```
 
-Then install the Playwright browser (only needed once):
-```bash
-/Library/Frameworks/Python.framework/Versions/3.13/bin/playwright install chromium
+The wizard will:
+1. Ask for your university's Blackboard URL (e.g. `https://blackboard.myuni.edu.au`)
+2. Auto-detect Ultra vs Classic interface
+3. Open a browser — log in as you normally would
+4. Test your connection and list your courses
+5. Optionally save credentials to macOS Keychain for auto-relogin
+6. Automatically configure Claude Desktop
+
+### 3 — Restart Claude Desktop and ask away
+
+```
+"What courses am I enrolled in?"
+"What assignments are due this week?"
+"Catch me up on everything in Blackboard"
 ```
 
-### Step 3 — Configure your credentials
+---
 
-Copy the example config and fill in your details:
-```bash
-cp .env.example .env
+## 🔐 Authentication
+
+This project uses a **zero-credentials-stored** approach by default:
+
+1. **Interactive browser login** — A real browser opens, you log in exactly as you would on the Blackboard website. Works with any SSO, MFA, or CAPTCHA.
+2. **Session cookie caching** — Your session is cached at `~/.bb_mcp_session.json` (outside the project, never committed).
+3. **Optional macOS Keychain** — For automatic re-login when sessions expire, credentials can be saved securely in macOS Keychain (never in any file).
+
+```
+Your credentials → macOS Keychain (encrypted, OS-managed)
+Your session    → ~/.bb_mcp_session.json (your home dir, not the repo)
+This repo       → Zero sensitive data
 ```
 
-Edit `.env`:
+---
+
+## 🏗️ Architecture
+
+```
+Claude Desktop
+     │  MCP (stdio)
+     ▼
+ server.py          ← FastMCP server, 9 tools registered
+     │
+     ▼
+ blackboard/
+ ├── client.py      ← HTTP client: REST API + HTML scraping fallback
+ ├── auth.py        ← Playwright SSO login + Keychain + cookie cache
+ └── models.py      ← Pydantic data models
+
+ config.py          ← Settings loaded from .env (URL, interface)
+ setup.py           ← One-command interactive setup wizard
+```
+
+**Data flow per tool call:**
+```
+Claude asks → MCP tool → check cached cookies → REST API request
+                                  │                      │
+                           expired? → re-login      scraping fallback
+                                         │
+                              browser (if needed)
+```
+
+---
+
+## 🛠️ Manual Configuration
+
+If you prefer to configure manually instead of using the wizard, create a `.env` file:
+
 ```ini
-BB_BASE_URL=https://learnline.cdu.edu.au
-BB_USERNAME=your_student_number          # e.g. 12345678
-BB_PASSWORD=your_learnline_password
+BB_BASE_URL=https://blackboard.myuni.edu.au
+BB_INTERFACE=ultra        # or: classic
 BB_SESSION_CACHE=~/.bb_mcp_session.json
-BB_HEADLESS=true
 ```
 
-> ⚠️ **Never commit `.env` to git.** It contains your credentials.
+Then add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
-### Step 4 — Test the login
-
-Run this to verify your credentials work and cookies are cached:
-```bash
-/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -c "
-import asyncio
-from blackboard.auth import login
-asyncio.run(login())
-print('Login successful!')
-"
-```
-
-If your university uses **MFA / 2-Factor Authentication**, set `BB_HEADLESS=false` in `.env` first so you can see the browser and complete the verification.
-
-### Step 5 — Configure Claude Desktop
-
-Find your Claude Desktop config file:
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-Add the following (replace the path with your actual project path):
 ```json
 {
   "mcpServers": {
-    "blackboard-cdu": {
-      "command": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
-      "args": ["/Users/sasi/Blackboard MCP/server.py"],
-      "cwd": "/Users/sasi/Blackboard MCP"
+    "blackboard": {
+      "command": "python3",
+      "args": ["/path/to/blackboard-mcp/server.py"],
+      "cwd": "/path/to/blackboard-mcp"
     }
   }
 }
 ```
 
-**Restart Claude Desktop.** You should see "blackboard-cdu" in the MCP tools list.
+---
+
+## 🔄 Session Management
+
+| Scenario | What happens |
+|----------|-------------|
+| First run | `setup.py` opens browser → you log in → cookies cached |
+| Server restart | Cached cookies reused automatically |
+| Session expired + Keychain set | Auto re-login headlessly |
+| Session expired + no Keychain | Re-run `python3 setup.py` |
+| Reset everything | `python3 setup.py --reset` |
 
 ---
 
-## Troubleshooting
+## 🤝 Contributing
 
-### Login fails / can't find fields
-Set `BB_HEADLESS=false` to watch the browser. The SSO login page selector may need adjustment if CDU changes their login page layout. Open an issue with a screenshot.
+Contributions are welcome! If your university's Blackboard works differently or you hit an issue:
 
-### Session expires frequently
-The server automatically re-logs in when your session expires. If it's happening very often, check if CDU has short session timeouts.
+1. Fork the repo
+2. Create a branch: `git checkout -b fix/my-university`
+3. Make your changes
+4. Open a Pull Request — please include your university name and Blackboard version
 
-### REST API returns 403
-Some tools fall back to HTML scraping automatically. If you're consistently getting no data, the scraping selectors may need updating for your version of Blackboard.
-
-### MFA / Authenticator app required
-1. Set `BB_HEADLESS=false` in `.env`
-2. Run `python -c "import asyncio; from blackboard.auth import login; asyncio.run(login())"`
-3. Complete the MFA in the browser window that opens
-4. Cookies are cached — you won't need to do this every time
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
-## Project Structure
+## 📋 Troubleshooting
 
-```
-Blackboard MCP/
-├── server.py              # MCP server — all tools registered here
-├── config.py              # Settings loaded from .env
-├── requirements.txt       # Python dependencies
-├── .env.example           # Credential template (copy to .env)
-├── README.md              # This file
-│
-└── blackboard/
-    ├── auth.py            # Playwright SSO login + cookie caching
-    ├── client.py          # HTTP client (REST API + HTML scraping fallback)
-    └── models.py          # Pydantic data models
-```
+**Browser keeps opening and closing**
+> Your session expired. Run `python3 setup.py` to re-authenticate.
 
----
+**"No courses found"**
+> The REST API may be restricted at your university. The client will fall back to HTML scraping — try `get_course_content` directly.
 
-## Privacy & Security
+**MCP server not showing in Claude Desktop**
+> Fully quit Claude Desktop (Cmd+Q) and reopen it. Check your config with:
+> `cat ~/Library/Application\ Support/Claude/claude_desktop_config.json`
 
-- Your credentials are stored **only** in `.env` on your local machine
-- Session cookies are cached in `~/.bb_mcp_session.json` (your home directory)
-- All traffic goes directly between your machine and `learnline.cdu.edu.au`
-- No data is sent to any third-party service
+**SSO / MFA issues**
+> Make sure `BB_INTERFACE` in `.env` matches your university's Blackboard version. Run `python3 setup.py` again if unsure.
 
 ---
 
-## Contributing
+## 📄 License
 
-Found a bug or want to add a tool? PRs welcome! Common improvements:
-- Better SSO selector detection for CDU's login page
-- Support for downloading files
-- Calendar integration for due dates
-- Discussion board reading
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  Made with ❤️ by a student, for students.<br>
+  <a href="https://github.com/sasinduranwadana/blackboard-mcp/issues">Report an Issue</a> · 
+  <a href="https://github.com/sasinduranwadana/blackboard-mcp/discussions">Discussions</a>
+</p>
