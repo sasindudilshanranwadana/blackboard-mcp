@@ -20,21 +20,57 @@ Or configure in Claude Desktop's config.json:
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
 from blackboard.client import BlackboardClient
+
+# ──────────────────────────────────────────────
+#  Version & auto-update
+# ──────────────────────────────────────────────
+
+PROJECT_DIR = Path(__file__).parent
+REPO = "sasindudilshanranwadana/blackboard-mcp"
+_VERSION = (PROJECT_DIR / "VERSION").read_text().strip() if (PROJECT_DIR / "VERSION").exists() else "unknown"
+_update_notice: str | None = None   # set by background check if a new version is available
+
+
+async def _check_for_updates() -> None:
+    """Background task: compare local VERSION with latest GitHub release tag."""
+    global _update_notice
+    try:
+        async with httpx.AsyncClient(timeout=6) as http:
+            # Check latest commit on main branch
+            r = await http.get(
+                f"https://api.github.com/repos/{REPO}/contents/VERSION",
+                headers={"Accept": "application/vnd.github.raw"},
+            )
+            if r.status_code == 200:
+                latest = r.text.strip()
+                if latest != _VERSION:
+                    _update_notice = (
+                        f"\n\n---\n"
+                        f"💡 **Blackboard MCP update available!** "
+                        f"(you have `v{_VERSION}`, latest is `v{latest}`)  "
+                        f"Ask me: _\"Update Blackboard MCP\"_ to install it automatically."
+                    )
+    except Exception:
+        pass   # silently ignore — never block tool calls for an update check
+
 
 # ──────────────────────────────────────────────
 #  Server initialisation
 # ──────────────────────────────────────────────
 
 mcp = FastMCP(
-    name="CDU Learnline",
+    name="Blackboard MCP",
     instructions=(
-        "You are a helpful assistant with access to the student's Charles Darwin University "
-        "Blackboard (Learnline) account. You can look up courses, announcements, assignments, "
+        "You are a helpful assistant with access to the student's university "
+        "Blackboard LMS account. You can look up courses, announcements, assignments, "
         "grades, and course content. Always present information in a clear, organised way. "
         "When showing due dates, highlight anything due within 3 days. "
         "When grades are available, calculate percentages and note if something is still pending."
@@ -51,6 +87,8 @@ async def get_client() -> BlackboardClient:
     global _client
     async with _client_lock:
         if _client is None:
+            # Fire update check in background — don't await it
+            asyncio.create_task(_check_for_updates())
             _client = BlackboardClient()
             await _client.initialize()
     return _client
@@ -602,7 +640,64 @@ async def summarize_activity() -> str:
         f"_Last updated: {now.strftime('%I:%M %p')} · Use `get_assignments`, `get_grades`, or `get_announcements` for more detail._",
     ]
 
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    if _update_notice:
+        result += _update_notice
+    return result
+
+
+@mcp.tool()
+async def update_server() -> str:
+    """
+    Update the Blackboard MCP server to the latest version from GitHub.
+    Pulls new code and reinstalls any updated dependencies automatically.
+    Use this when a new version is available.
+    """
+    global _update_notice
+    try:
+        # git pull
+        pull = subprocess.run(
+            ["git", "-C", str(PROJECT_DIR), "pull", "--ff-only"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if pull.returncode != 0:
+            return f"❌ git pull failed:\n```\n{pull.stderr.strip()}\n```"
+
+        pull_out = pull.stdout.strip()
+        already_latest = "Already up to date" in pull_out
+
+        # pip install -r requirements.txt (using same python as this process)
+        import sys
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "-r",
+             str(PROJECT_DIR / "requirements.txt")],
+            capture_output=True, text=True, timeout=120,
+        )
+
+        new_version = (PROJECT_DIR / "VERSION").read_text().strip() \
+            if (PROJECT_DIR / "VERSION").exists() else "unknown"
+        _update_notice = None   # clear the notice
+
+        if already_latest:
+            return (
+                f"✅ **Already on the latest version** (`v{new_version}`)\n"
+                "No changes were needed."
+            )
+
+        lines = [
+            f"## ✅ Blackboard MCP Updated to `v{new_version}`",
+            "",
+            "**Changes pulled:**",
+            f"```\n{pull_out}\n```",
+            "",
+            "⚠️ **Restart Claude Desktop** (or your AI client) to load the new version.",
+        ]
+        return "\n".join(lines)
+
+    except subprocess.TimeoutExpired:
+        return "❌ Update timed out. Please run `git pull` manually in the install directory."
+    except Exception as e:
+        return f"❌ Update failed: {e}"
 
 
 # ──────────────────────────────────────────────
