@@ -21,6 +21,7 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urljoin
 
 import httpx
@@ -110,12 +111,25 @@ class BlackboardClient:
 
     async def initialize(self) -> None:
         """Load session cookies and create the HTTP client."""
-        self._cookies = await auth.get_cookies()
-        await self._build_client()
-        if not await self._check_session():
-            print("[client] Session invalid, re-authenticating...", file=sys.stderr)
-            self._cookies = await auth.get_cookies(force_refresh=True)
+        cached = auth.load_cached_cookies()
+        if cached:
+            self._cookies = cached
             await self._build_client()
+        else:
+            try:
+                self._cookies = await auth.get_cookies()
+                await self._build_client()
+            except Exception as exc:
+                print(f"[client] Could not load cookies: {exc}", file=sys.stderr)
+                self._cookies = {}
+                await self._build_client()
+
+        if self._cookies and not await self._check_session():
+            print("[client] Session check failed with loaded cookies, checking disk cache...", file=sys.stderr)
+            cached_disk = auth.load_cached_cookies()
+            if cached_disk and cached_disk != self._cookies:
+                self._cookies = cached_disk
+                await self._build_client()
 
     async def close(self) -> None:
         if self._http:
@@ -129,10 +143,18 @@ class BlackboardClient:
                 await self._http.aclose()
             except Exception:
                 pass
+        headers = dict(DEFAULT_HEADERS)
+        bb_router = self._cookies.get("BbRouter", "")
+        xsrf_match = re.search(r"xsrf:([a-zA-Z0-9\-]+)", bb_router)
+        if xsrf_match:
+            headers["x-blackboard-xsrf"] = xsrf_match.group(1)
+        elif "XSRF-TOKEN" in self._cookies:
+            headers["x-blackboard-xsrf"] = self._cookies["XSRF-TOKEN"]
+
         self._http = httpx.AsyncClient(
             base_url=settings.base_url,
             cookies=self._cookies,
-            headers=DEFAULT_HEADERS,
+            headers=headers,
             follow_redirects=True,
             timeout=30.0,
         )
@@ -142,6 +164,9 @@ class BlackboardClient:
     async def _check_session(self) -> bool:
         """Return True if our session cookies are still valid."""
         try:
+            resp = await self._http.get(f"{API_BASE}/users/me")
+            if resp.status_code == 200:
+                return True
             resp = await self._http.get("/ultra/institution-page")
             final_url = str(resp.url)
             base_host = settings.base_url.split("//")[-1].split("/")[0]
@@ -149,8 +174,6 @@ class BlackboardClient:
                 login_keywords = ["login", "signin", "saml", "auth", "shibboleth", "/cas/"]
                 if not any(kw in final_url.lower() for kw in login_keywords):
                     return True
-            if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
-                return True
             return False
         except Exception:
             return False
@@ -159,26 +182,32 @@ class BlackboardClient:
         """
         GET from the Blackboard REST API.
         Returns parsed JSON or None on failure.
-        Auto-retries once after re-authentication on 401/403.
+        Auto-retries once after re-authentication on 401.
         Respects the shared request semaphore to avoid rate limiting.
         """
         for attempt in range(2):
             try:
                 async with _REQUEST_SEMAPHORE:
                     resp = await self._http.get(f"{API_BASE}{path}", params=params or {})
-                if resp.status_code in (401, 403) and attempt == 0:
-                    print("[client] Session expired, re-authenticating...", file=sys.stderr)
-                    self._cookies = await auth.get_cookies(force_refresh=True)
-                    await self._build_client()
-                    continue
+                if resp.status_code == 401 and attempt == 0:
+                    disk_cookies = auth.load_cached_cookies()
+                    if disk_cookies and disk_cookies != self._cookies:
+                        self._cookies = disk_cookies
+                        await self._build_client()
+                        continue
+                    if not await self._check_session():
+                        print("[client] Session expired, re-authenticating...", file=sys.stderr)
+                        try:
+                            self._cookies = await auth.get_cookies(force_refresh=True)
+                            await self._build_client()
+                        except Exception:
+                            pass
+                        continue
                 if resp.status_code == 200:
                     if "application/json" in resp.headers.get("content-type", ""):
                         return resp.json()
                 return None
             except Exception as exc:
-                # Many universities restrict the public REST API to staff —
-                # 401/403 + transport errors are expected; we fall back to
-                # HTML scraping. Only log at DEBUG to avoid noisy stderr.
                 if os.environ.get("BB_MCP_DEBUG"):
                     print(f"[client] API error on {path}: {exc}", file=sys.stderr)
                 return None
@@ -244,49 +273,54 @@ class BlackboardClient:
 
     async def get_courses(self) -> list[Course]:
         """List courses the student is enrolled in."""
-        profile = await self.get_user_profile()
-        if not profile:
-            return await self._scrape_courses()
-
-        memberships = await self._api_get(
-            f"/users/{profile.id}/courses", params={"limit": 100}
-        )
+        bb_courses: list[Course] = []
+        memberships = await self._api_get("/users/me/courses", params={"limit": 100})
         if not memberships or "results" not in memberships:
-            return await self._scrape_courses()
+            profile = await self.get_user_profile()
+            if profile and profile.id and profile.id != "unknown":
+                memberships = await self._api_get(
+                    f"/users/{profile.id}/courses", params={"limit": 100}
+                )
 
-        course_ids = [
-            m["courseId"]
-            for m in memberships["results"]
-            if m.get("courseRoleId") in ("Student", "student", None)
-        ]
-        if not course_ids:
-            course_ids = [m["courseId"] for m in memberships["results"]]
+        if memberships and "results" in memberships:
+            course_ids = [
+                m["courseId"]
+                for m in memberships["results"]
+                if m.get("courseRoleId") in ("Student", "student", "S", "OriginalStudent", "UltraStudent", None)
+            ]
+            if not course_ids:
+                course_ids = [m["courseId"] for m in memberships["results"]]
 
-        async def fetch_one(cid: str) -> Course | None:
-            data = await self._api_get(f"/courses/{cid}")
-            if not data or not isinstance(data, dict):
-                return None
-            return Course(
-                id=data.get("id", cid),
-                course_id=data.get("courseId", cid),
-                name=data.get("name", cid),
-                term=(
-                    data["term"]["name"]
-                    if isinstance(data.get("term"), dict) and data["term"].get("name")
-                    else None
-                ),
-                is_available=(
-                    data.get("availability", {}).get("available", "Yes") == "Yes"
-                ),
-                description=_html_to_text(data.get("description", "")),
-                url=_course_url(data.get("id", cid)),
+            async def fetch_one(cid: str) -> Course | None:
+                data = await self._api_get(f"/courses/{cid}")
+                if not data or not isinstance(data, dict):
+                    return None
+                return Course(
+                    id=data.get("id", cid),
+                    course_id=data.get("courseId", cid),
+                    name=data.get("name", cid),
+                    term=(
+                        data["term"]["name"]
+                        if isinstance(data.get("term"), dict) and data["term"].get("name")
+                        else None
+                    ),
+                    is_available=(
+                        data.get("availability", {}).get("available", "Yes") == "Yes"
+                    ),
+                    description=_html_to_text(data.get("description", "")),
+                    url=_course_url(data.get("id", cid)),
+                )
+
+            results = await asyncio.gather(
+                *[fetch_one(cid) for cid in course_ids],
+                return_exceptions=True,
             )
+            bb_courses = [c for c in results if isinstance(c, Course)]
 
-        results = await asyncio.gather(
-            *[fetch_one(cid) for cid in course_ids],
-            return_exceptions=True,
-        )
-        return [c for c in results if isinstance(c, Course)]
+        if not bb_courses:
+            bb_courses = await self._scrape_courses()
+
+        return bb_courses
 
     async def _scrape_courses(self) -> list[Course]:
         """Scrape enrolled courses from the Blackboard web interface."""
@@ -405,6 +439,38 @@ class BlackboardClient:
         if not assignments:
             assignments = await self._assignments_from_gradebook(course_id, course_name)
 
+        cal_assignments = await self._assignments_from_calendar(course_id, course_name)
+        existing_titles = {a.title.lower() for a in assignments}
+        for ca in cal_assignments:
+            if ca.title.lower() not in existing_titles:
+                assignments.append(ca)
+
+        return assignments
+
+    async def _assignments_from_calendar(
+        self, course_id: str, course_name: str
+    ) -> list[Assignment]:
+        """Fetch items from Blackboard calendar for a specific course."""
+        data = await self._api_get("/calendars/items", params={"limit": 100})
+        if not data or "results" not in data:
+            return []
+
+        assignments = []
+        seen = set()
+        for item in data["results"]:
+            if item.get("calendarId") == course_id or course_id in str(item.get("calendarName", "")):
+                due_date = _parse_bb_datetime(item.get("start") or item.get("end"))
+                title = item.get("title") or "Untitled"
+                key = (title, due_date)
+                if key not in seen:
+                    seen.add(key)
+                    assignments.append(Assignment(
+                        id=item.get("id", ""),
+                        course_id=course_id,
+                        course_name=course_name,
+                        title=title,
+                        due_date=due_date,
+                    ))
         return assignments
 
     async def _assignments_from_gradebook(

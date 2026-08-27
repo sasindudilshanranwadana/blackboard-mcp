@@ -70,19 +70,22 @@ LOGIN_URL_PATTERNS = [
     "saml",
     "/cas/",
     "shibboleth",
+    "api-gateway",
 ]
 
 
 def _get_landing_path() -> str:
-    interface = getattr(settings, "interface", "ultra").lower()
-    if interface == "classic":
-        return "/webapps/portal/frameset.jsp"
-    return "/ultra/institution-page"
+    return "/webapps/login/"
 
 
 # ──────────────────────────────────────────────
 #  Cookie cache
 # ──────────────────────────────────────────────
+
+def filter_cookies(cookies: dict[str, str]) -> dict[str, str]:
+    bb_keys = {'JSESSIONID', 'BbRouter', 'samlCookie', 'AWSALB', 'AWSALBCORS', 'BbClientCalenderTimeZone', 'XSRF-TOKEN', 's_session_id', 'session_id'}
+    return {k: v for k, v in cookies.items() if k in bb_keys or 'bb' in k.lower() or 'blackboard' in k.lower()}
+
 
 def load_cached_cookies() -> dict[str, str] | None:
     if not CACHE_PATH.exists():
@@ -90,13 +93,14 @@ def load_cached_cookies() -> dict[str, str] | None:
     try:
         data = json.loads(CACHE_PATH.read_text())
         if isinstance(data, dict) and data:
-            return data
+            return filter_cookies(data)
     except Exception:
         pass
     return None
 
 
 def save_cookies(cookies: dict[str, str]) -> None:
+    cookies = filter_cookies(cookies)
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     CACHE_PATH.write_text(json.dumps(cookies, indent=2))
     try:

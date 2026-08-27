@@ -85,6 +85,7 @@ _client_lock = asyncio.Lock()
 
 async def get_client() -> BlackboardClient:
     """Return the shared BlackboardClient, initialising it on first call."""
+    from blackboard import auth
     from blackboard.auth import NotConfiguredError as _NCE
     from config import settings as _s
     if not _s.is_configured():
@@ -94,6 +95,15 @@ async def get_client() -> BlackboardClient:
         if _client is None:
             _client = BlackboardClient()
             await _client.initialize()
+        else:
+            if not _client._cookies or not await _client._check_session():
+                cached = auth.load_cached_cookies()
+                if cached and cached != _client._cookies:
+                    _client._cookies = cached
+                    await _client._build_client()
+                if not await _client._check_session():
+                    _client = BlackboardClient()
+                    await _client.initialize()
     return _client
 
 
@@ -489,14 +499,18 @@ async def get_due_dates(days_ahead: int = 14) -> str:
         return _NOT_CONFIGURED
 
     courses = await client.get_courses()
-    cutoff = datetime.now(timezone.utc) + timedelta(days=days_ahead)
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days_ahead)
 
     upcoming = []
+    seen = set()
     for course in courses:
         for a in await client.get_assignments(course.id, course.name):
-            # Include overdue, upcoming within window, and undated items
-            if a.due_date is None or a.due_date <= cutoff:
-                upcoming.append(a)
+            if a.due_date and (now - timedelta(hours=12)) <= a.due_date <= cutoff:
+                key = (a.title, a.due_date, course.name)
+                if key not in seen:
+                    seen.add(key)
+                    upcoming.append(a)
 
     if not upcoming:
         return f"🎉 Nothing due in the next {days_ahead} days! Enjoy the break."
