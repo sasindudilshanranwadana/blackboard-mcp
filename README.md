@@ -302,3 +302,4 @@ MIT — see [LICENSE](LICENSE).
 </p>
 
 <!-- Verified for deployment with FastMCP -->
+<!-- Tier check 18 -->
