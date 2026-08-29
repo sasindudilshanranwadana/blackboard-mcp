@@ -300,3 +300,5 @@ MIT — see [LICENSE](LICENSE).
   <a href="https://github.com/sasindudilshanranwadana/blackboard-mcp/issues">Report an Issue</a> · 
   <a href="https://github.com/sasindudilshanranwadana/blackboard-mcp/discussions">Discussions</a>
 </p>
+
+<!-- Verified for deployment with FastMCP -->
