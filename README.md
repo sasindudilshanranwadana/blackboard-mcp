@@ -11,6 +11,21 @@
   <img src="https://img.shields.io/badge/platforms-Claude%20%7C%20Cursor%20%7C%20Windsurf%20%7C%20Zed%20%7C%20Cline%20%7C%20Continue%20%7C%20Codex%20%7C%20Gemini-blueviolet?style=flat-square" alt="Supported platforms">
 </p>
 
+
+<p align="center">
+  <a href="https://github.com/sasindudilshanranwadana/blackboard-mcp/stargazers">
+    <img src="https://img.shields.io/github/stars/sasindudilshanranwadana/blackboard-mcp?style=social" alt="GitHub Stars">
+  </a>
+  &nbsp;
+  <a href="https://smithery.ai/server/@sasindudilshanranwadana/blackboard-mcp">
+    <img src="https://smithery.ai/badge/@sasindudilshanranwadana/blackboard-mcp" alt="Smithery Badge">
+  </a>
+</p>
+
+<p align="center">
+  <b>⭐ If this saves you time, please star the repo — it really helps!</b>
+</p>
+
 <p align="center">
   <b>Talk to your university Blackboard in plain English — through any AI assistant.</b><br>
   Works with <em>any</em> university that uses Blackboard Learn (Ultra or Classic).
