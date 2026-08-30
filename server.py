@@ -762,6 +762,121 @@ async def summarize_activity() -> str:
 
 
 @mcp.tool()
+async def search_announcements(query: str, course_name_or_code: str | None = None) -> str:
+    """
+    Search course announcements for specific keywords like 'exam', 'extension', 'cancelled', 'zoom', 'room'.
+
+    Args:
+        query: Word or phrase to search for (case-insensitive).
+        course_name_or_code: Optional course name/code to limit the search. Searches all courses if omitted.
+    """
+    try:
+        client = await get_client()
+    except NotConfiguredError:
+        return _NOT_CONFIGURED
+
+    query_lower = query.lower().strip()
+    courses = await client.get_courses()
+    if course_name_or_code:
+        course = client._match_course(courses, course_name_or_code)
+        if not course:
+            return f"❌ Course '{course_name_or_code}' not found."
+        target_courses = [course]
+    else:
+        target_courses = courses
+
+    matches = []
+    for c in target_courses:
+        anns = await client.get_announcements(c.id, c.name, limit=20)
+        for ann in anns:
+            if query_lower in ann.title.lower() or (ann.body and query_lower in ann.body.lower()):
+                matches.append(ann)
+
+    if not matches:
+        scope = f" in **{course_name_or_code}**" if course_name_or_code else " across all courses"
+        return f"🔍 No announcements matching **'{query}'** found{scope}."
+
+    lines = [f"## 🔍 Announcements matching '{query}' ({len(matches)} found)", ""]
+    for ann in matches:
+        date_str = _fmt_dt(ann.created) if ann.created else "Recent"
+        lines.append(f"### 📢 {ann.title}")
+        lines.append(f"**Course:** {ann.course_name} · **Date:** {date_str}")
+        if ann.body:
+            body_preview = ann.body[:350] + "…" if len(ann.body) > 350 else ann.body
+            lines.append(f"\n{body_preview}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def calculate_gpa_and_standing() -> str:
+    """
+    Calculate current academic progress and standing across all enrolled courses.
+    Shows completed assessments, earned points, weighted percentages, and grading bands (HD/D/C/P).
+    """
+    try:
+        client = await get_client()
+    except NotConfiguredError:
+        return _NOT_CONFIGURED
+
+    courses = await client.get_courses()
+    if not courses:
+        return "📭 No courses found."
+
+    lines = ["## 🎓 Academic Progress & Standing Summary", ""]
+    
+    total_earned_all = 0.0
+    total_possible_all = 0.0
+    graded_courses_count = 0
+
+    for course in courses:
+        grades = await client.get_grades(course.id)
+        graded = [g for g in grades if g.score is not None and g.max_score and g.max_score > 0]
+        pending = [g for g in grades if g.score is None]
+
+        if not graded and not pending:
+            continue
+
+        lines.append(f"### 📚 {course.name} ({course.course_id})")
+        if graded:
+            course_earned = sum(g.score for g in graded if g.score is not None)
+            course_possible = sum(g.max_score for g in graded if g.max_score is not None)
+            course_pct = round((course_earned / course_possible) * 100, 1) if course_possible > 0 else 0.0
+            
+            # Australian standard grading bands
+            if course_pct >= 85:
+                standing = "🌟 High Distinction (HD)"
+            elif course_pct >= 75:
+                standing = "✨ Distinction (D)"
+            elif course_pct >= 65:
+                standing = "✅ Credit (C)"
+            elif course_pct >= 50:
+                standing = "🟡 Pass (P)"
+            else:
+                standing = "❌ Fail / Needs Attention (N)"
+
+            lines.append(f"- **Current Average:** `{course_pct}%` ({course_earned:.1f}/{course_possible:.1f} pts) — **{standing}**")
+            lines.append(f"- **Completed Tasks:** {len(graded)} graded")
+            total_earned_all += course_earned
+            total_possible_all += course_possible
+            graded_courses_count += 1
+        else:
+            lines.append("- **Current Average:** _No graded items released yet_")
+
+        if pending:
+            lines.append(f"- **Pending / Upcoming:** {len(pending)} assessments remaining")
+        lines.append("")
+
+    if graded_courses_count > 0 and total_possible_all > 0:
+        overall_pct = round((total_earned_all / total_possible_all) * 100, 1)
+        lines.append("---")
+        lines.append(f"### 📈 Cumulative Standing: **{overall_pct}%** ({total_earned_all:.1f}/{total_possible_all:.1f} Total Points)")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
 async def update_server() -> str:
     """
     Update the Blackboard MCP server to the latest version from GitHub.
