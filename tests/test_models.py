@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from blackboard.models import Course, GradeEntry, Assignment, Announcement, UserProfile
+
+from blackboard.models import Assignment, Course, GradeEntry, UserProfile
 
 
 def test_user_profile():

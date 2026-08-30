@@ -825,7 +825,7 @@ async def calculate_gpa_and_standing() -> str:
         return "📭 No courses found."
 
     lines = ["## 🎓 Academic Progress & Standing Summary", ""]
-    
+
     total_earned_all = 0.0
     total_possible_all = 0.0
     graded_courses_count = 0
@@ -843,7 +843,7 @@ async def calculate_gpa_and_standing() -> str:
             course_earned = sum(g.score for g in graded if g.score is not None)
             course_possible = sum(g.max_score for g in graded if g.max_score is not None)
             course_pct = round((course_earned / course_possible) * 100, 1) if course_possible > 0 else 0.0
-            
+
             # Australian standard grading bands
             if course_pct >= 85:
                 standing = "🌟 High Distinction (HD)"

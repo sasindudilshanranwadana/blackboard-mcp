@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-import pytest
+
 from blackboard.client import _parse_bb_datetime
 from server import _fmt_dt, _urgency_emoji
 

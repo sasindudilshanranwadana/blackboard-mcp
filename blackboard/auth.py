@@ -161,7 +161,7 @@ def _is_blackboard_url(url: str) -> bool:
     return base in url
 
 
-async def _wait_for_login(page: "Page", timeout_seconds: int = 180) -> bool:
+async def _wait_for_login(page: Page, timeout_seconds: int = 180) -> bool:
     import time
     interface = getattr(settings, "interface", "ultra").lower()
     deadline = time.monotonic() + timeout_seconds
@@ -176,9 +176,7 @@ async def _wait_for_login(page: "Page", timeout_seconds: int = 180) -> bool:
             continue
 
         if not left_home:
-            if not _is_blackboard_url(url) or _is_login_url(url):
-                left_home = True
-            elif time.monotonic() > grace_deadline:
+            if not _is_blackboard_url(url) or _is_login_url(url) or time.monotonic() > grace_deadline:
                 left_home = True
             else:
                 await asyncio.sleep(0.8)

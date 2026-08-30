@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-import pytest
-from blackboard.models import Course, GradeEntry, Announcement
+from blackboard.models import GradeEntry
 
 
 def test_grade_standing_bands():

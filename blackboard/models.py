@@ -7,7 +7,6 @@ All datetimes are stored as UTC-aware datetime objects.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,8 +20,8 @@ class UserProfile(BaseModel):
     username: str
     given_name: str
     family_name: str
-    email: Optional[str] = None
-    student_id: Optional[str] = None
+    email: str | None = None
+    student_id: str | None = None
 
     @property
     def full_name(self) -> str:
@@ -34,11 +33,11 @@ class Course(BaseModel):
     id: str                                   # Internal Blackboard ID e.g. "_12345_1"
     course_id: str                            # Human-readable code e.g. "COMP101_2024_S1"
     name: str
-    instructor: Optional[str] = None
-    term: Optional[str] = None
+    instructor: str | None = None
+    term: str | None = None
     is_available: bool = True
-    description: Optional[str] = None
-    url: Optional[str] = None                 # Direct link to the course in Blackboard
+    description: str | None = None
+    url: str | None = None                 # Direct link to the course in Blackboard
 
 
 class Announcement(BaseModel):
@@ -48,9 +47,9 @@ class Announcement(BaseModel):
     course_name: str
     title: str
     body: str
-    creator: Optional[str] = None
-    created: Optional[datetime] = None
-    modified: Optional[datetime] = None
+    creator: str | None = None
+    created: datetime | None = None
+    modified: datetime | None = None
 
 
 class Assignment(BaseModel):
@@ -59,24 +58,24 @@ class Assignment(BaseModel):
     course_id: str
     course_name: str
     title: str
-    due_date: Optional[datetime] = None
-    max_score: Optional[float] = None
-    score: Optional[float] = None
-    status: Optional[str] = None             # e.g. "submitted", "graded", "needs_submission"
-    description: Optional[str] = None
-    url: Optional[str] = None
+    due_date: datetime | None = None
+    max_score: float | None = None
+    score: float | None = None
+    status: str | None = None             # e.g. "submitted", "graded", "needs_submission"
+    description: str | None = None
+    url: str | None = None
 
 
 class GradeEntry(BaseModel):
     """A single row in a course gradebook."""
     column_name: str
-    score: Optional[float] = None
-    max_score: Optional[float] = None
-    status: Optional[str] = None
-    feedback: Optional[str] = None
+    score: float | None = None
+    max_score: float | None = None
+    status: str | None = None
+    feedback: str | None = None
 
     @property
-    def percentage(self) -> Optional[float]:
+    def percentage(self) -> float | None:
         if self.score is not None and self.max_score and self.max_score > 0:
             return round((self.score / self.max_score) * 100, 1)
         return None
@@ -87,6 +86,6 @@ class ContentItem(BaseModel):
     id: str
     title: str
     content_type: str                        # e.g. "document", "folder", "assignment", "link"
-    description: Optional[str] = None
-    url: Optional[str] = None
-    children: list["ContentItem"] = Field(default_factory=list)
+    description: str | None = None
+    url: str | None = None
+    children: list[ContentItem] = Field(default_factory=list)
