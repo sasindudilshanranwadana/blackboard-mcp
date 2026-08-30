@@ -1,0 +1,25 @@
+# Smithery / MCP Registry configuration for blackboard-mcp
+# https://smithery.ai
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      blackboard_url:
+        type: string
+        description: "Your university Blackboard URL (e.g. https://blackboard.myuniversity.edu)"
+      headless:
+        type: boolean
+        description: "Run browser in headless mode (default: true)"
+        default: true
+    required: []
+  commandFunction: |
+    (config) => ({
+      command: "python3",
+      args: ["server.py"],
+      env: {
+        BLACKBOARD_URL: config.blackboard_url || "",
+        HEADLESS: config.headless !== false ? "true" : "false"
+      }
+    })
